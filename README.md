@@ -29,7 +29,7 @@ Maximized parallelism through the utilization of multithreading.
 
 ### Build
 
-1. If the database already exists before switching the current engine, you must first construct the $\text{bitmap}$ table using $\text{init\_construct\_fin\_table\_src}$.
+1. If the database already exists before switching the current engine, you must first construct the $\text{bitmap}$ table using `init\_construct\_fin\_table\_src`.
    
 
 
