@@ -25,11 +25,21 @@ Maximized parallelism through the utilization of multithreading.
 ### Prerequisites
 - **SQLite** (latest version from [SQLite GitHub Repository](https://github.com/sqlite/sqlite))
 - **Python** (Python 3.8.10 [Python Download Link](https://www.python.org/downloads/release/python-3810/))
-- **Linux Kernel** (Working environment requires a recent Linux Kernel with fully implemented $\text{IO\_uring}$ functionality, version 5.1 or later is recommended.)
+- **Linux Kernel** (Working environment requires a recent Linux Kernel with fully implemented IO\_uring functionality, version 5.1 or later is recommended.)
 
 ### Build
 
 1. If the database already exists before switching the current engine, you must first construct the $\text{bitmap}$ table using `init\_construct\_fin\_table\_src`.
+Please perform a full scan query on all tables within the DB file.
+```
+CREATE TABLE bitmap_table (
+    fippgno INTEGER,
+    childpg INTEGER,
+    PRIMARY KEY (fippgno,childpg)
+);
+SELECT * FROM table_name;
+```
+
    
 
 
