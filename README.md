@@ -29,17 +29,47 @@ Maximized parallelism through the utilization of multithreading.
 
 ### Build
 
-1. If the database already exists before switching the current engine, you must first construct the $\text{bitmap}$ table using $\text{init_construct_fin_table_src}$.
+1. If the database already exists before switching the current engine, you must first construct the $\text{bitmap}$ table using $\text{init\_construct\_fin\_table\_src}$.
+   
 
 
 2. Clone this repository and navigate to the project directory:
 ```
-cd 
+cd Async\_SQLite
 ```
 
-2. Configure
+3. Configure
 ```
 mkdir bld && cd bld
 ../src/configure
 ```
+
+4. Select Mode
+```
+vi Makefile
+```
+Change  Makefile.
+
+```
+CC = gcc
+CFLAGS = -g -O2 -pthread -I/usr/include
+LIBS += -luring -pthread
+```
+
+6. Compile
+```
+cd ../../bld
+make clean && make -j
+sudo make install -j
+```
+
+
+## Run
+
+Run the Async-SQLite 
+```
+cd bld
+./sqlite3
+```
+
 
