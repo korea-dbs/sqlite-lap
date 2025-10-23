@@ -7,16 +7,39 @@ maximizing cache utilization and reducing query latency.
 
 ## Features
 - **Asynchronous operation**:  
-  The project uses IOuring to  changes in the WAL file and uploads the updated WAL file to a specified AWS S3 bucket.
+  Vanilla, which was originally synchronous, was modified to perform asynchronously.
   
 - **Optimize Read operation**:  
-  In addition to WAL file synchronization, this project also allows uploading SQL statements to an S3 bucket for further analysis or recovery purposes.
+  We optimized SQLite's read operation to achieve better read performance.
 
-- **Seamless Integration with SQLite**:  
+- **Seamless Integration with SQLite**:
+  The project is designed to work directly with SQLite, enabling transparent and efficient integration without modifying the core database engine.  
 
 
 - **Parallelism**:  
+Maximized parallelism through the utilization of multithreading.
 
 
-- ****:  
+## Getting Started
+
+### Prerequisites
+- **SQLite** (latest version from [SQLite GitHub Repository](https://github.com/sqlite/sqlite))
+- **Python** (Python 3.8.10 [Python Download Link](https://www.python.org/downloads/release/python-3810/))
+- **Linux Kernel** (Working environment requires a recent Linux Kernel with fully implemented $\text{IO\_uring}$ functionality, version 5.1 or later is recommended.)
+
+### Build
+
+1. If the database already exists before switching the current engine, you must first construct the $\text{bitmap}$ table using $\text{construct\_src}$.
+
+
+2. Clone this repository and navigate to the project directory:
+```
+cd 
+```
+
+2. Configure
+```
+mkdir bld && cd bld
+../src/configure
+```
 
