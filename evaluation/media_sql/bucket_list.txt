@@ -1,0 +1,12 @@
+Queries w/ Bucket id (Might be modified with erased Bucket id.)
+
+F(files) : F2
+G(gallery) : G2, G3
+I(Instagram): 
+L(?):
+M(Message (Android App)): 
+Q(?):
+S(Snow):
+T(Tiktok):
+X(Formally Twitter):
+E(Epik):
