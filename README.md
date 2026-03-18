@@ -1,7 +1,7 @@
-# SQLite-Async
-SQLite-Async prefetches the corresponding leaf pages identified by the
+# (SQLite,libSQL)-LAP
+SQLite-LAP prefetches the corresponding leaf pages identified by the
 Final Interior Node, enabling non-blocking and parallel processing of I/O requests to
-maximize system throughput and resource utilization. SQLite-Async fur-
+maximize system throughput and resource utilization. SQLite-LAP fur-
 ther optimizes data access by enabling concurrent prefetching, thereby
 maximizing cache utilization and reducing query latency.
 
@@ -13,17 +13,18 @@ maximizing cache utilization and reducing query latency.
   We optimized SQLite's read operation to achieve better read performance.
 
 - **Seamless Integration with SQLite**:
-  The project is designed to work directly with SQLite, enabling transparent and efficient integration without modifying the core database engine.  
+  The project is designed to work directly with SQLite and libSQL enabling transparent and efficient integration without modifying the core database engine.  
 
 
 - **Parallelism**:  
-Maximized parallelism through the utilization of multithreading.
+Maximized parallelism through the utilization of multithreading in FIN-leaf level.
 
 
 ## Getting Started
 
 ### Prerequisites
 - **SQLite** (latest version from [SQLite GitHub Repository](https://github.com/sqlite/sqlite))
+- **libSQL** (latest version from [libSQL GitHub Repository] (https://github.com/tursodatabase/libsql)) 
 - **Python** (Python 3.8.10 [Python Download Link](https://www.python.org/downloads/release/python-3810/))
 - **Linux Kernel** (Working environment requires a recent Linux Kernel with fully implemented IO\_uring functionality, version 5.1 or later is recommended.)
 
@@ -45,7 +46,7 @@ SELECT * FROM table_name;
 
 2. Clone this repository and navigate to the project directory:
 ```
-cd Async\_SQLite
+cd SQLite_LAP
 ```
 
 3. Configure
