@@ -24,7 +24,7 @@ Maximized parallelism through the utilization of multithreading in FIN-leaf leve
 
 ### Prerequisites
 - **SQLite** (latest version from [SQLite GitHub Repository](https://github.com/sqlite/sqlite))
-- **libSQL** (latest version from [libSQL GitHub Repository] (https://github.com/tursodatabase/libsql)) 
+- **libSQL** (latest version from [libSQL GitHub Repository](https://github.com/tursodatabase/libsql)) 
 - **Python** (Python 3.8.10 [Python Download Link](https://www.python.org/downloads/release/python-3810/))
 - **Linux Kernel** (Working environment requires a recent Linux Kernel with fully implemented IO\_uring functionality, version 5.1 or later is recommended.)
 
