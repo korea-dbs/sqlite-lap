@@ -1,4 +1,4 @@
-# (SQLite,libSQL)-LAP
+# SQLite-LAP
 SQLite-LAP prefetches the corresponding leaf pages identified by the
 Final Interior Node, enabling non-blocking and parallel processing of I/O requests to
 maximize system throughput and resource utilization. SQLite-LAP fur-
@@ -77,7 +77,7 @@ sudo make install -j
 
 ## Run
 
-Run the Async-SQLite 
+Run the SQLite-LAP
 ```
 cd bld
 ./sqlite3
