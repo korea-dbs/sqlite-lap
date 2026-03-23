@@ -230,7 +230,7 @@ int sqlite3_initialize(void){
   memset(&params, 0, sizeof(params));
   params.flags = IORING_SETUP_SQPOLL;
   if (!ring_initialized) {
-  	if(io_uring_queue_init_params(1024,&ring,&params)<0){
+  	if(io_uring_queue_init_params(512,&ring,&params)<0){
         	fprintf(stderr, "global io_uring init failed\n");
                
         }else{
