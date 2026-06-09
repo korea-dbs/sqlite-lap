@@ -46,6 +46,8 @@ SELECT * FROM table_name;
 
 2. Clone this repository and navigate to the project directory:
 ```
+Please select the system to use:
+( libSQL-LAP | ReadAheadsrc | SQLite-LAP | Vanilla+BG | Vanilla+uring )
 cd SQLite_LAP
 ```
 

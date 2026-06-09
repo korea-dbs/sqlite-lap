@@ -5580,6 +5580,7 @@ static int moveToChild(BtCursor *pCur, u32 newPgno){
 
   //end
   //nomem IAM version
+  /*
   //int rc = getAndInitPage(pCur->pBt, newPgno, &pCur->pPage, pCur, pCur->curPagerFlags);
   if(pCur->pPage->aData[0] == (PTF_LEAFDATA | PTF_INTKEY | PTF_ZERODATA)&&sqltoggle == 0){
   //if  find fip we have to execute select sql in bitmap_table
@@ -5597,10 +5598,6 @@ static int moveToChild(BtCursor *pCur, u32 newPgno){
     }
     int count = 0;
     // for hit rate
-    /*
-    DbPage *pPg = 0;
-    sqlite3PagerGet(pCur->pBt->pPager, pCur->pPage->pgno, &pPg, 0);
-    */
     //end
     Pgno *childarr = (Pgno*)malloc(sizeof(Pgno) * 600);
     while(sqlite3_step(stmt) == SQLITE_ROW){
@@ -5621,20 +5618,20 @@ static int moveToChild(BtCursor *pCur, u32 newPgno){
   //  task->pages = (Pgno*)malloc(sizeof(Pgno)*count);
   //  task->pages = childarr;
     memcpy(task->pages, childarr, sizeof(Pgno)*count);
-    /*
-    pthread_t th;
-    int rc3 = pthread_create(&th, NULL, prefetch_worker, task);
-    */
+    
+  //  pthread_t th;
+  //  int rc3 = pthread_create(&th, NULL, prefetch_worker, task);
+    
     thread_pool_add_task(task);
     free(childarr);
   }
 	
-
+*/
 
 
   //sync version iouring
- /* 
-  int rc = getAndInitPage(pCur->pBt, newPgno, &pCur->pPage, pCur, pCur->curPagerFlags);
+ 
+ // int rc = getAndInitPage(pCur->pBt, newPgno, &pCur->pPage, pCur, pCur->curPagerFlags);
   if(pCur->pPage->aData[0] == (PTF_LEAFDATA | PTF_INTKEY | PTF_ZERODATA)){
 //	fprintf(stderr,"found FIP\n");
   	int currentFIP = pCur->pPage->pgno;
@@ -5689,10 +5686,10 @@ static int moveToChild(BtCursor *pCur, u32 newPgno){
 	if (drained) io_uring_cq_advance(&ring, drained);
    }
   //end
-*/
-//iouring thread version
+
+//thread version
 /*
-  int rc = getAndInitPage(pCur->pBt, newPgno, &pCur->pPage, pCur, pCur->curPagerFlags);
+//  int rc = getAndInitPage(pCur->pBt, newPgno, &pCur->pPage, pCur, pCur->curPagerFlags);
   if(pCur->pPage->aData[0] == (PTF_LEAFDATA | PTF_INTKEY | PTF_ZERODATA)){
   	int currentFIP = pCur->pPage->pgno;
 	

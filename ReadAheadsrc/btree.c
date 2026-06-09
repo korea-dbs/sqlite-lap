@@ -20,55 +20,6 @@
 ** SQLite database.
 */
 static const char zMagicHeader[] = SQLITE_FILE_HEADER;
-//declare func, define global
-#include <liburing.h>
-#include "pager.h"
-#include <time.h>
-#include <pthread.h>
-#define MAX_PREFETCH 600
-#define MAX_UPDATE 1
-static int btreeGetPage(BtShared *pBt, Pgno pgno, MemPage **ppPage, int flags);
-static int btreeCursor(Btree *p, Pgno iTable, int wrFlag, struct KeyInfo *pKeyInfo, BtCursor *pCur);
-void loadIndexedPagesPerFIP(sqlite3 *db, int iTable);
-
-typedef struct {
-	unsigned int parent_pgno;
-	unsigned int new_pgno;
-} FinUpdateInfo;
-
-FinUpdateInfo update_fin_arr[MAX_UPDATE];
-int update_fin = 0;
-bool FIPcurtoggle = 0;
-bool sqltoggle = 0;
-int test_cnt = 0;
-static struct io_uring ring;
-static int ring_initialized = 0;
-static struct io_uring_cqe *cqe;
-
-
-typedef struct PrefetchTask {
-    struct io_uring *ring;  
-    Pager *pager;            
-    int real_fd;             
-    int count;
-    //xxx
-    //Pgno *pages; 
-    Pgno pages[600];
-    struct PrefetchTask *next; 
-} PrefetchTask;
-
-#define THREAD_POOL_SIZE 1
-
-typedef struct ThreadPool {
-	pthread_t *threads;
-	PrefetchTask *task_queue;
-	pthread_mutex_t mutex;
-	pthread_cond_t cond;
-	bool shutdown;
-} ThreadPool;
-
-ThreadPool *pool;
-
 
 /*
 ** Set this global variable to 1 to enable tracing using the TRACE
@@ -80,6 +31,7 @@ int sqlite3BtreeTrace=1;  /* True to enable tracing */
 #else
 # define TRACE(X)
 #endif
+
 /*
 ** Extract a 2-byte big-endian integer from an array of unsigned bytes.
 ** But if the value is zero, make it 65536.
@@ -531,7 +483,6 @@ static void downgradeAllSharedCacheTableLocks(Btree *p){
 static void releasePage(MemPage *pPage);         /* Forward reference */
 static void releasePageOne(MemPage *pPage);      /* Forward reference */
 static void releasePageNotNull(MemPage *pPage);  /* Forward reference */
-
 
 /*
 ***** This routine is used inside of assert() only ****
@@ -2019,7 +1970,6 @@ static int freeSpace(MemPage *pPage, u16 iStart, u16 iSize){
 **         PTF_LEAFDATA | PTF_INTKEY                (0x05,  5)
 **         PTF_ZERODATA | PTF_LEAF                  (0x0a, 10)
 **         PTF_LEAFDATA | PTF_INTKEY | PTF_LEAF     (0x0d, 13)
-*
 */
 static int decodeFlags(MemPage *pPage, int flagByte){
   BtShared *pBt;     /* A copy of pPage->pBt */
@@ -2069,25 +2019,6 @@ static int decodeFlags(MemPage *pPage, int flagByte){
       pPage->intKey = 1;
       pPage->maxLocal = pBt->maxLeaf;
       pPage->minLocal = pBt->minLeaf;
-//add 0x07 case for finaliterior page
-//I implement this flags for non-indexed table interoir page start
-
-    }else if(flagByte==(PTF_LEAFDATA | PTF_INTKEY | PTF_ZERODATA)){
-//	    fprintf(stderr,"0x07 flag generate");
-//	    pPage->intKey = 0;
-            pPage->intKey = 1;
-	    pPage->intKeyLeaf = 0;
-	   // pPage->xCellSize = cellSizePtr;
-	    pPage->xCellSize = cellSizePtrNoPayload;
-	   // pPage->xParseCell = btreeParseCellPtrIndex;
-	    pPage->xParseCell = btreeParseCellPtrNoPayload;
-	    pPage->maxLocal = pBt->maxLeaf;
-	    pPage->minLocal = pBt->minLeaf;
-	   // pPage->maxLocal = pBt->maxLocal;
-	   // pPage->minLocal = pBt->minLocal;
-	
-
- //end
     }else{
       pPage->intKey = 0;
       pPage->intKeyLeaf = 0;
@@ -4663,7 +4594,7 @@ static int btreeCursor(
   Pgno iTable,                           /* Root page of table to open */
   int wrFlag,                            /* 1 to write. 0 read-only */
   struct KeyInfo *pKeyInfo,              /* First arg to comparison function */
-  BtCursor *pCur  /* Space for new cursor */
+  BtCursor *pCur                         /* Space for new cursor */
 ){
   BtShared *pBt = p->pBt;                /* Shared b-tree handle */
   BtCursor *pX;                          /* Looping over other all cursors */
@@ -4743,7 +4674,7 @@ int sqlite3BtreeCursor(
   Pgno iTable,                                /* Root page of table to open */
   int wrFlag,                                 /* 1 to write. 0 read-only */
   struct KeyInfo *pKeyInfo,                   /* First arg to xCompare() */
-  BtCursor *pCur /* Write new cursor here */
+  BtCursor *pCur                              /* Write new cursor here */
 ){
   if( p->sharable ){
     return btreeCursorWithLock(p, iTable, wrFlag, pKeyInfo, pCur);
@@ -5390,147 +5321,6 @@ const void *sqlite3BtreePayloadFetch(BtCursor *pCur, u32 *pAmt){
 ** if an intkey page appears to be the parent of a non-intkey page, or
 ** vice-versa).
 */
-
-// method of pthread iouring
-/*
-static void *prefetch_worker(void *arg) {
-	PrefetchTask *t = (PrefetchTask*)arg;
-	//xxx
-	//struct iovec *iovecs = (struct iovec*)calloc(t->count, sizeof(struct iovec));
-	struct iovec iovecs[500];
-	if (!iovecs) goto cleanup;
-	char **bufs = (char**)calloc(t->count, sizeof(char*));
-	if (!bufs) goto cleanup;
-	for (int i = 0; i < t->count; i++) {
-		 bufs[i] = (char*)malloc(4096);
-		 if (!bufs[i]) { t->count = i; break; }
-		 iovecs[i].iov_base = bufs[i];
-		 iovecs[i].iov_len  = 4096;
-		 struct io_uring_sqe *sqe = io_uring_get_sqe(t->ring);
-		 if (!sqe) { t->count = i; break; }
-		 off_t off = ((off_t)t->pages[i] - 1) * (off_t)4096;
-//		 fprintf(stderr,"%llu complete",(unsigned long long)t->pages[i]);
-		 io_uring_prep_readv(sqe, t->real_fd, &iovecs[i], 1, off);
-		 io_uring_sqe_set_data64(sqe, (unsigned long long)i);
-	}
-	int ret = io_uring_submit(t->ring);
-	if (ret < 0) goto cleanup;
-	int need = t->count;
-	while (need > 0) {
-//		struct io_uring_cqe *cqe = NULL;
-		int rc = io_uring_wait_cqe(t->ring, &cqe);
-		if (rc < 0) break;
-		int idx = (int)io_uring_cqe_get_data64(cqe);
-		int res = cqe->res;
-		//for Isolate
-		if (res >= 0 && t->pager && idx >= 0 && idx < t->count) {
-			DbPage *pPg = 0;
-			int rc2 = sqlite3PagerGet(t->pager, t->pages[idx], &pPg, 0);
-			if (rc2 == SQLITE_OK && pPg) {
-				sqlite3PagerUnref(pPg);
-			}
-		}
-		//end
-		io_uring_cqe_seen(t->ring, cqe);
-		need--;
-	}
-cleanup:
-	//xxx
-	//if (iovecs) free(iovecs);
-	if (bufs) {
-        for (int i = 0; i < t->count; i++) free(bufs[i]);
-        free(bufs);
-   	}
-//    	if (t->pages) free(t->pages);
-    	free(t);
-    	return NULL;
-}
-*/
-static void *prefetch_worker(void *arg) {
-    ThreadPool *p = (ThreadPool*)arg;
-    PrefetchTask *task;
-    
-    while (true) {
-        pthread_mutex_lock(&p->mutex);
-        
-        while (p->task_queue == NULL && !p->shutdown) {
-            pthread_cond_wait(&p->cond, &p->mutex);
-        }
-        
-        if (p->shutdown) {
-            pthread_mutex_unlock(&p->mutex);
-            break;
-        }
-        
-        task = p->task_queue;
-        p->task_queue = p->task_queue->next;
-        pthread_mutex_unlock(&p->mutex);
-        
-        // --- io_uring prefetching logic starts here ---
-        struct iovec iovecs[600];
-        char **bufs = (char**)calloc(task->count, sizeof(char*));
-        
-        if (!bufs) goto cleanup;
-        
-        for (int i = 0; i < task->count; i++) {
-            bufs[i] = (char*)malloc(4096);
-            if (!bufs[i]) { task->count = i; break; }
-            iovecs[i].iov_base = bufs[i];
-            iovecs[i].iov_len  = 4096;
-            struct io_uring_sqe *sqe = io_uring_get_sqe(task->ring);
-            if (!sqe) { task->count = i; break; }
-            off_t off = ((off_t)task->pages[i] - 1) * (off_t)4096;
-            io_uring_prep_readv(sqe, task->real_fd, &iovecs[i], 1, off);
-            io_uring_sqe_set_data64(sqe, (unsigned long long)i);
-        }
-        
-        int ret = io_uring_submit(task->ring);
-        if (ret < 0) goto cleanup;
-        
-        int need = task->count;
-        while (need > 0) {
-            struct io_uring_cqe *cqe = NULL;
-            int rc = io_uring_wait_cqe(task->ring, &cqe);
-            if (rc < 0) break;
-            int idx = (int)io_uring_cqe_get_data64(cqe);
-		
-            int res = cqe->res;
-            io_uring_cqe_seen(task->ring, cqe);
-            need--;
-        }
-        
-    cleanup:
-        if (bufs) {
-            for (int i = 0; i < task->count; i++) {
-                if(bufs[i]) free(bufs[i]);
-            }
-            free(bufs);
-        }
-        free(task);
-    }
-    return NULL;
-}
-
-void thread_pool_add_task(PrefetchTask *task) {
-    pthread_mutex_lock(&pool->mutex);
-    
-    // Add the task to the end of the queue
-    if (pool->task_queue == NULL) {
-        pool->task_queue = task;
-    } else {
-        PrefetchTask *current = pool->task_queue;
-        while (current->next != NULL) {
-            current = current->next;
-        }
-        current->next = task;
-    }
-    
-    pthread_cond_signal(&pool->cond);
-    pthread_mutex_unlock(&pool->mutex);
-}
-
-
-
 static int moveToChild(BtCursor *pCur, u32 newPgno){
   assert( cursorOwnsBtShared(pCur) );
   assert( pCur->eState==CURSOR_VALID );
@@ -5539,193 +5329,14 @@ static int moveToChild(BtCursor *pCur, u32 newPgno){
   if( pCur->iPage>=(BTCURSOR_MAX_DEPTH-1) ){
     return SQLITE_CORRUPT_BKPT;
   }
-  //movchild-1
-  MemPage *pParent = pCur->pPage;
-  sqlite3 *db = pCur->pBt->db;
-
-
   pCur->info.nSize = 0;
   pCur->curFlags &= ~(BTCF_ValidNKey|BTCF_ValidOvfl);
   pCur->aiIdx[pCur->iPage] = pCur->ix;
   pCur->apPage[pCur->iPage] = pCur->pPage;
   pCur->ix = 0;
   pCur->iPage++;
-//prefetching for complete bitmap_table
- int rc = getAndInitPage(pCur->pBt, newPgno, &pCur->pPage, pCur, pCur->curPagerFlags);
- if (pCur->pPage->aData[0] == 0x0d && pParent->pgno != 1 && sqltoggle == 0) {
-	
-         //if pcur page is leaf change pParent flag and insert to bitmap tabl
-	 	if(pParent->aData[0] == 0x05){
-			pParent->aData[0] = (PTF_LEAFDATA | PTF_INTKEY | PTF_ZERODATA);
-			fprintf(stderr, "Modifying parent flags : %d of page %d child : %d \n",pParent->aData[0], pParent->pgno,pCur->pPage->pgno);
-			sqlite3PagerWrite(pParent->pDbPage);
-		}
-
-
-		sqltoggle = 1;
-		char zSql[100];
-		snprintf(zSql,sizeof(zSql), "INSERT OR IGNORE INTO bitmap_table VALUES (%u ,%u);"
-				,pParent->pgno,pCur->pPage->pgno);
-
-//		fprintf(stderr,"%u , %u ",pParent->pgno,pCur->pPage->pgno);
-		char *err=0;
-		int rc2 = sqlite3_exec(db, zSql, 0, 0, &err);
-		if( rc2!=SQLITE_OK ){
-		  fprintf(stderr,"exec failed rc=%d msg=%s\n",rc, err?err:"(null)");
-		  sqlite3_free(err);
-		}
-		sqltoggle = 0;
- }
- 
-
-  //end
-  //nomem IAM version
-  //int rc = getAndInitPage(pCur->pBt, newPgno, &pCur->pPage, pCur, pCur->curPagerFlags);
-  if(pCur->pPage->aData[0] == (PTF_LEAFDATA | PTF_INTKEY | PTF_ZERODATA)&&sqltoggle == 0){
-  //if  find fip we have to execute select sql in bitmap_table
-    sqltoggle = 1;
-    char zSql[100];
-    snprintf(zSql,sizeof(zSql), "select childpg from bitmap_table where fippgno = %u;",pCur->pPage->pgno);
-    sqlite3_stmt *stmt = NULL;
-
-
-    
-    int rc2 = sqlite3_prepare_v2(db,zSql,-1,&stmt,NULL);
-    
-    if(rc2 != SQLITE_OK){
-    	fprintf(stderr,"qry execute error");
-    }
-    int count = 0;
-    // for hit rate
-    /*
-    DbPage *pPg = 0;
-    sqlite3PagerGet(pCur->pBt->pPager, pCur->pPage->pgno, &pPg, 0);
-    */
-    //end
-    Pgno *childarr = (Pgno*)malloc(sizeof(Pgno) * 600);
-    while(sqlite3_step(stmt) == SQLITE_ROW){
-    	int childpg = sqlite3_column_int(stmt, 0);
-	childarr[count] = (Pgno)childpg;
-//	fprintf(stderr,"%d\n",count);
-	count ++;
-    }
-    sqlite3_finalize(stmt);
-  //  fprintf(stderr,"%u qry ex\n",pCur->pPage->pgno);
-    sqltoggle = 0;
-    unixFile *uf = (unixFile *)pCur->pBt->pPager->fd;
-    int real_fd = uf->h;
-    PrefetchTask *task = (PrefetchTask*)calloc(1, sizeof(PrefetchTask));
-    task->ring    =&ring;
-    task->pager   = pCur->pBt->pPager;
-    task->count   = count;
-  //  task->pages = (Pgno*)malloc(sizeof(Pgno)*count);
-  //  task->pages = childarr;
-    memcpy(task->pages, childarr, sizeof(Pgno)*count);
-    /*
-    pthread_t th;
-    int rc3 = pthread_create(&th, NULL, prefetch_worker, task);
-    */
-    thread_pool_add_task(task);
-    free(childarr);
-  }
-	
-
-
-
-  //sync version iouring
- /* 
-  int rc = getAndInitPage(pCur->pBt, newPgno, &pCur->pPage, pCur, pCur->curPagerFlags);
-  if(pCur->pPage->aData[0] == (PTF_LEAFDATA | PTF_INTKEY | PTF_ZERODATA)){
-//	fprintf(stderr,"found FIP\n");
-  	int currentFIP = pCur->pPage->pgno;
-//	PgHdr *pPgArray[MAX_PREFETCH] = {0};
-	int real_fd;
-	int *pages;
-	struct io_uring_sqe *sqe;
-	struct io_uring_cqe *cqe;
-	//find FIPpgno which is same number of currentFIP
-
-	FIPPages *f = &bitmap_map[currentFIP];
-//	fprintf(stderr,"fipno : %d child cnt :%d \n",currentFIP , f->count);
-	if(f->count > MAX_PREFETCH){
-		fprintf(stderr, "Too many pages to prefetch: %d (MAX=%d)\n", f->count, MAX_PREFETCH);
-	}
-	pages = f->childpgno; //child leaf page no
-	unixFile *uf = (unixFile *)pCur->pBt->pPager->fd; 
-	real_fd = uf->h;
-
-
-	//upto this situation we found correct FIP in mem and prepare iouring queue
-	//struct iovec iovecs[512];
-	//char iov_buffers[512][4096]; 
-
-	for(int i = 0 ; i < f->count ; i ++){
-		iovecs[i].iov_base = iov_buffers[i];
-		iovecs[i].iov_len = 4096;
-		sqe = io_uring_get_sqe(&ring);
-		if (!sqe) break;
-		io_uring_prep_readv(sqe, real_fd , &iovecs[i], 1,(sqlite3_int64)(pages[i]-1)*4096);
-		io_uring_sqe_set_data(sqe, (void *)(uintptr_t)i);
-	}
-	//upto this situation we prepare all leafchild in target FIP
-	int ret = io_uring_submit(&ring);
-	if(ret < 0){
-		fprintf(stderr, "io_uring_submit: %s\n", strerror(-ret));
-	}
-
-	int completed = 0;
-	unsigned head, drained = 0;
-	struct io_uring_cqe *lcqe;
-	io_uring_for_each_cqe(&ring, head, lcqe){
-		int idx = (int)(uintptr_t)io_uring_cqe_get_data(lcqe);
-		if (idx >= 0 && idx < f->count) {
-			Pgno pg = pages[idx];
-			DbPage *pPg = 0;
-			int rc2 = sqlite3PagerGet(pCur->pBt->pPager, pg, &pPg, 0);
-			if (rc2==SQLITE_OK && pPg) sqlite3PagerUnref(pPg);
-		}
-		drained++;
-	}
-	if (drained) io_uring_cq_advance(&ring, drained);
-   }
-  //end
-*/
-//iouring thread version
-/*
-  int rc = getAndInitPage(pCur->pBt, newPgno, &pCur->pPage, pCur, pCur->curPagerFlags);
-  if(pCur->pPage->aData[0] == (PTF_LEAFDATA | PTF_INTKEY | PTF_ZERODATA)){
-  	int currentFIP = pCur->pPage->pgno;
-	
-//	sqlite3PagerGet(pCur->pBt->pPager, currentFIP, &pPg[pPgindex], 0);
-//	sqlite3PagerRef(pPg[pPgindex]);
-//	pPgindex ++;
-	
-	//xxx
-	//FIPPages *f = &bitmap_map[currentFIP];
-	//end
-	FIPPages *f = bitmap_map[currentFIP];
-	int limit = f->count > MAX_PREFETCH ? MAX_PREFETCH : f->count;
-	unixFile *uf = (unixFile *)pCur->pBt->pPager->fd;
-	int real_fd = uf->h;
-	PrefetchTask *task = (PrefetchTask*)calloc(1, sizeof(PrefetchTask));
-	task->ring    =&ring;
-	task->pager   = pCur->pBt->pPager; 
-	task->real_fd = real_fd;
-	task->count   = limit;
-	task->pages = (Pgno*)malloc(sizeof(Pgno)*limit);
-	memcpy(task->pages, f->childpgno, sizeof(Pgno)*limit);
-	pthread_t th;
-	int rc = pthread_create(&th, NULL, prefetch_worker, task);
-//	pthread_detach(th);
-  }
-*/
-
-
-
-
-
-  return rc;
-//return getAndInitPage(pCur->pBt, newPgno, &pCur->pPage, pCur,pCur->curPagerFlags);
+  return getAndInitPage(pCur->pBt, newPgno, &pCur->pPage, pCur,
+                        pCur->curPagerFlags);
 }
 
 #ifdef SQLITE_DEBUG
@@ -6520,6 +6131,7 @@ static SQLITE_NOINLINE int btreeNext(BtCursor *pCur){
   int rc;
   int idx;
   MemPage *pPage;
+
   assert( cursorOwnsBtShared(pCur) );
   if( pCur->eState!=CURSOR_VALID ){
     assert( (pCur->curFlags & BTCF_ValidOvfl)==0 );
@@ -6542,6 +6154,7 @@ static SQLITE_NOINLINE int btreeNext(BtCursor *pCur){
   if( !pPage->isInit ){
     return SQLITE_CORRUPT_BKPT;
   }
+
   if( idx>=pPage->nCell ){
     if( !pPage->leaf ){
       rc = moveToChild(pCur, get4byte(&pPage->aData[pPage->hdrOffset+8]));
@@ -8263,48 +7876,7 @@ static int balance_quick(MemPage *pParent, MemPage *pPage, u8 *pSpace){
 
     /* Set the right-child pointer of pParent to point to the new page. */
     put4byte(&pParent->aData[pParent->hdrOffset+8], pgnoNew);
-    // insert bitmap info if pParent is FIN add pParent, pgnoNew in bitmap_table
-    if(pNew->aData[0] == 0xd){
-	fprintf(stderr,"add new data for bitmap_table %d\n", update_fin);
-        update_fin_arr[update_fin].parent_pgno = pParent->pgno;
-	update_fin_arr[update_fin].new_pgno = pgnoNew;
-	update_fin ++;
-	 if(pParent->aData[0] == 0x05){
-         	pParent->aData[0] = (PTF_LEAFDATA | PTF_INTKEY | PTF_ZERODATA);
-                fprintf(stderr, "Modifying parent flags : %d of page %d\n",pParent->aData[0], pParent->pgno);
-                sqlite3PagerWrite(pParent->pDbPage);
-         }	
-	
-
-	if(update_fin >= MAX_UPDATE){
-		//time to start
-//		struct timeval start, end;
-//		long mtime, seconds, useconds;
-//		gettimeofday(&start, NULL); 
-
-		sqltoggle = 1;
-		sqlite3 *db = pPage->pBt->db;
-		char zSql[100];
-		fprintf(stderr,"threshold occur load to bitmap\n");
-		for(int i = 0; i < MAX_UPDATE ; i ++){
-			snprintf(zSql,sizeof(zSql), "INSERT OR IGNORE INTO bitmap_table VALUES (%u ,%u);"
-					                        ,update_fin_arr[i].parent_pgno,update_fin_arr[i].parent_pgno);
-			char *err=0;
-			int rc2 = sqlite3_exec(db, zSql, 0, 0, &err);
-			if( rc2!=SQLITE_OK ){
-				fprintf(stderr,"exec failed rc=%d msg=%s\n",rc, err?err:"(null)");
-				sqlite3_free(err);
-			}
-		}
-		sqltoggle=0;
-//		gettimeofday(&end, NULL);
-//		seconds  = end.tv_sec  - start.tv_sec;
-//		useconds = end.tv_usec - start.tv_usec;
-//		long total_useconds = (seconds * 1000000) + useconds;
-//		fprintf(stderr, "SQLITE_EXEC_TIME: %ld us for %d inserts\n", total_useconds, MAX_UPDATE);
-	}
-    }
-    //end
+  
     /* Release the reference to the new page. */
     releasePage(pNew);
   }
