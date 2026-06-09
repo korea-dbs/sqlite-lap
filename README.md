@@ -45,9 +45,14 @@ SELECT * FROM table_name;
 
 
 2. Clone this repository and navigate to the project directory:
-```
 Please select the system to use:
 ( libSQL-LAP | ReadAheadsrc | SQLite-LAP | Vanilla+BG | Vanilla+uring )
+SQLite-LAP combines three major components: iouring, background execution, and FIN aware prefetching.
+- Vanilla+ReadAhead enables readahead, which prefetches five consecutive pages following the currently accessed page in a single I/O operation, where five is selected as the number that yields the best performance in our empirical evaluation.
+- Vanilla+uring issues batch read requests for the leaf pages under a FIN via iouring on the main thread upon reaching a FIN during B-tree traversal, but blocks the main thread until all I/O completions are acknowledged.
+- Vanilla+BG decouples leaf-page I/O from the main thread via two background threads, the same thread count as SQLIte-LAP, upon reaching a FIN during B-tree traversal, but issues a separate system call for each page read without batching.
+
+```
 cd SQLite_LAP
 ```
 
