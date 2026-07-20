@@ -53,3 +53,13 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# local build output (run configure/make to regenerate)
+bld/
+.libs/
+
+# local test databases
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
