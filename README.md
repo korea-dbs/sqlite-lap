@@ -49,16 +49,18 @@ There are two separate binaries, used for two separate purposes. **Do not mix th
 | `init_construct_fin_table_src` | Creating tables, loading/inserting data, running `.finconstruct` | — |
 | `SQLite-LAP` | Read-only queries (`SELECT`) on an already-constructed DB | Creating tables or inserting data |
 
-**Why:** `SQLite-LAP`'s `balance_quick()` (the b-tree rebalance routine that runs during
-`INSERT`-triggered page splits) rewrites a page's type flag mid-rebalance to mark it as a
-FIN (Final Interior Node). This corrupts the b-tree while it's still being restructured —
-writing through the `SQLite-LAP` binary reliably produces `database disk image is
-malformed` and can also deadlock (a separate, reentrant `bitmap_table` write from the same
-function hangs if `bitmap_table` doesn't exist yet). `init_construct_fin_table_src` does not
-have this problem: its FIN-promotion logic only runs in `moveToChild()` during ordinary
-cursor traversal over already-committed pages, never mid-rebalance, so it is safe for both
-writes and reads. Always build your dataset there, then switch to `SQLite-LAP` only for the
-read-side experiment.
+Always build and load your dataset with `init_construct_fin_table_src` first, run
+`.finconstruct`, and only then switch to the `SQLite-LAP` binary to run the read-side
+experiment.
+
+## Engine variants
+
+`( libSQL-LAP | ReadAheadsrc | SQLite-LAP | Vanilla+BG | Vanilla+uring )`
+
+- **SQLite-LAP** combines three major components: iouring, background execution, and FIN aware prefetching.
+- **Vanilla+ReadAhead** enables readahead, which prefetches five consecutive pages following the currently accessed page in a single I/O operation, where five is selected as the number that yields the best performance in our empirical evaluation.
+- **Vanilla+uring** issues batch read requests for the leaf pages under a FIN via iouring on the main thread upon reaching a FIN during B-tree traversal, but blocks the main thread until all I/O completions are acknowledged.
+- **Vanilla+BG** decouples leaf-page I/O from the main thread via two background threads, the same thread count as SQLite-LAP, upon reaching a FIN during B-tree traversal, but issues a separate system call for each page read without batching.
 
 ## Build
 
