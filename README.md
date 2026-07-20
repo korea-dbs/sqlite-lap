@@ -30,9 +30,7 @@ Each engine variant is a self-contained SQLite 3.42.0 source tree:
 ```
 
 `SQLite-LAP` and `init_construct_fin_table_src` are set up this way and build standalone —
-no external source tree is required. `libSQL-LAP`, `ReadAheadsrc`, `Vanilla+BG`, and
-`Vanilla+uring` have not been restructured this way yet (they still need an external
-sqlite-src-3420000 tree to build against).
+no external source tree is required.
 
 ## Prerequisites
 - `gcc`, `make`, `tclsh` (used to generate the amalgamation during build)
