@@ -19,6 +19,10 @@ maximizing cache utilization and reducing query latency.
   Maximized parallelism through the utilization of multithreading in FIN-leaf level.
 
 ## Repository layout
+```
+git clone https://github.com/korea-dbs/sqlite-lap.git
+cd sqlite-lap
+```
 
 Each engine variant is a self-contained SQLite 3.42.0 source tree:
 
