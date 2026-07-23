@@ -18,6 +18,51 @@ maximizing cache utilization and reducing query latency.
 - **Parallelism**:
   Maximized parallelism through the utilization of multithreading in FIN-leaf level.
 
+
+## Docker
+
+A `Dockerfile` at the repo root builds both engines (`sqlite3-construct` and `sqlite3-lap`)
+into one image, with `liburing` built from source since it isn't packaged for the base image.
+
+```bash
+docker build -t sqlite-lap .
+```
+
+Run it with a directory mounted at `/data` for your database files. `SQLite-LAP`'s
+`IORING_SETUP_SQPOLL` mode needs extra permissions that Docker doesn't grant by default:
+
+```bash
+docker run --rm -it \
+  --security-opt seccomp=unconfined \
+  --ulimit memlock=-1:-1 \
+  --cap-add SYS_ADMIN \
+  -v "$(pwd)/data:/data" \
+  sqlite-lap
+```
+
+Inside the container, `sqlite3-construct`/`sqlite3-lap` just open an interactive shell —
+you still type the SQL yourself (see the Example section below):
+```bash
+sqlite3-construct test.db   # build + .finconstruct
+sqlite3-lap test.db         # read-only experiments
+```
+
+To automatically run that whole example end-to-end and verify it worked, run `smoke-test`
+instead (as the container command, or from inside the shell):
+```bash
+docker run --rm \
+  --security-opt seccomp=unconfined \
+  --ulimit memlock=-1:-1 \
+  --cap-add SYS_ADMIN \
+  -v "$(pwd)/data:/data" \
+  sqlite-lap smoke-test
+```
+It builds a 5000-row table with `init_construct_fin_table_src`, runs `.finconstruct`,
+switches to `SQLite-LAP`, re-reads the table, and reports pass/fail plus the `io_uring`
+cache hit/miss stats. Optional args: `smoke-test [db_path] [row_count]`.
+
+
+
 ## Repository layout
 ```
 git clone https://github.com/korea-dbs/sqlite-lap.git
@@ -148,45 +193,3 @@ On open, `SQLite-LAP` prints `ring init IAM-nomem` / `THD-Pool init` to stderr o
 `close func hit : N ,miss : M` — the pager cache hit/miss count for the session. A high
 hit ratio here means the background prefetcher is successfully warming leaf pages (via
 `bitmap_table` + batched `io_uring` reads) ahead of the cursor reaching them.
-
-## Docker
-
-A `Dockerfile` at the repo root builds both engines (`sqlite3-construct` and `sqlite3-lap`)
-into one image, with `liburing` built from source since it isn't packaged for the base image.
-
-```bash
-docker build -t sqlite-lap .
-```
-
-Run it with a directory mounted at `/data` for your database files. `SQLite-LAP`'s
-`IORING_SETUP_SQPOLL` mode needs extra permissions that Docker doesn't grant by default:
-
-```bash
-docker run --rm -it \
-  --security-opt seccomp=unconfined \
-  --ulimit memlock=-1:-1 \
-  --cap-add SYS_ADMIN \
-  -v "$(pwd)/data:/data" \
-  sqlite-lap
-```
-
-Inside the container, `sqlite3-construct`/`sqlite3-lap` just open an interactive shell —
-you still type the SQL yourself (see the Example section above):
-```bash
-sqlite3-construct test.db   # build + .finconstruct
-sqlite3-lap test.db         # read-only experiments
-```
-
-To automatically run that whole example end-to-end and verify it worked, run `smoke-test`
-instead (as the container command, or from inside the shell):
-```bash
-docker run --rm \
-  --security-opt seccomp=unconfined \
-  --ulimit memlock=-1:-1 \
-  --cap-add SYS_ADMIN \
-  -v "$(pwd)/data:/data" \
-  sqlite-lap smoke-test
-```
-It builds a 5000-row table with `init_construct_fin_table_src`, runs `.finconstruct`,
-switches to `SQLite-LAP`, re-reads the table, and reports pass/fail plus the `io_uring`
-cache hit/miss stats. Optional args: `smoke-test [db_path] [row_count]`.
