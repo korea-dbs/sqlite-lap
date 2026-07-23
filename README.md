@@ -18,6 +18,36 @@ maximizing cache utilization and reducing query latency.
 - **Parallelism**:
   Maximized parallelism through the utilization of multithreading in FIN-leaf level.
 
+
+## Docker
+
+A `Dockerfile` at the repo root builds both engines (`sqlite3-construct` and `sqlite3-lap`)
+into one image, with `liburing` built from source since it isn't packaged for the base image.
+
+```bash
+docker build -t sqlite-lap .
+```
+
+Run it with a directory mounted at `/data` for your database files. `SQLite-LAP`'s
+`IORING_SETUP_SQPOLL` mode needs extra permissions that Docker doesn't grant by default:
+
+```bash
+docker run --rm -it \
+  --security-opt seccomp=unconfined \
+  --ulimit memlock=-1:-1 \
+  --cap-add SYS_ADMIN \
+  -v "$(pwd)/data:/data" \
+  sqlite-lap
+```
+
+Inside the container:
+```bash
+sqlite3-construct test.db   # build + .finconstruct
+sqlite3-lap test.db         # read-only experiments
+```
+
+
+
 ## Repository layout
 ```
 git clone https://github.com/korea-dbs/sqlite-lap.git
@@ -149,29 +179,4 @@ On open, `SQLite-LAP` prints `ring init IAM-nomem` / `THD-Pool init` to stderr o
 hit ratio here means the background prefetcher is successfully warming leaf pages (via
 `bitmap_table` + batched `io_uring` reads) ahead of the cursor reaching them.
 
-## Docker
 
-A `Dockerfile` at the repo root builds both engines (`sqlite3-construct` and `sqlite3-lap`)
-into one image, with `liburing` built from source since it isn't packaged for the base image.
-
-```bash
-docker build -t sqlite-lap .
-```
-
-Run it with a directory mounted at `/data` for your database files. `SQLite-LAP`'s
-`IORING_SETUP_SQPOLL` mode needs extra permissions that Docker doesn't grant by default:
-
-```bash
-docker run --rm -it \
-  --security-opt seccomp=unconfined \
-  --ulimit memlock=-1:-1 \
-  --cap-add SYS_ADMIN \
-  -v "$(pwd)/data:/data" \
-  sqlite-lap
-```
-
-Inside the container:
-```bash
-sqlite3-construct test.db   # build + .finconstruct
-sqlite3-lap test.db         # read-only experiments
-```
