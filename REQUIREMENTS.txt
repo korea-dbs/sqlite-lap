@@ -1,0 +1,61 @@
+REQUIREMENTS
+============
+
+Hardware
+--------
+- Standard x86_64 machine. No GPU or non-standard peripherals required.
+- Linux kernel >= 5.1 (io_uring support), required only for the SQLite-LAP
+  engine. Kernel >= 5.11 is recommended: on older kernels (this artifact was
+  developed and tested on 5.10.0), SQLite-LAP's IORING_SETUP_SQPOLL mode
+  requires the CAP_SYS_ADMIN capability, which is not needed on 5.11+. See
+  the Docker section below.
+- Disk: ~1 GB free (Docker image is ~560 MB; add space for whatever test
+  databases you generate).
+- Memory: no unusual requirement beyond compiling SQLite and holding your
+  test database's working set in the page cache.
+
+Software
+--------
+Two ways to get a working environment; Docker is the path this artifact was
+verified against and is recommended.
+
+Option A - Docker (recommended)
+  - Docker >= 20.10 (tested with Docker 28.1.1)
+  - No other host packages required; the image builds its own toolchain.
+
+Option B - native build (Linux, Debian/Ubuntu-based; tested on Ubuntu 20.04)
+  - gcc, make
+  - tcl8.6 (tclsh; used to generate the SQLite amalgamation at build time)
+  - libreadline-dev, libncurses-dev, zlib1g-dev (used by the sqlite3 shell)
+  - liburing (dev headers + library), needed by the SQLite-LAP engine only.
+    Not packaged for Ubuntu 20.04 (no apt candidate); this artifact builds
+    it from source (liburing-2.6 tag) -- see the Dockerfile for the exact
+    steps, which apply the same way outside Docker.
+
+Python (evaluation/ scripts only)
+  - Python 3.8+ (tested with 3.8.10)
+  - See evaluation/requirements.txt for pinned packages (numpy).
+  - Not needed to build or run either sqlite3 engine; only used by the
+    evaluation/*.py helper scripts.
+
+Deviations from a standard environment (justification)
+--------------------------------------------------------
+1. liburing is built from source rather than installed via a package
+   manager. It provides no apt package on the base image used
+   (Ubuntu 20.04); building from source is required to get the io_uring
+   support that SQLite-LAP's prefetching is built on, which is the
+   mechanism this artifact evaluates.
+
+2. Running the SQLite-LAP engine (not the construction-only engine) inside
+   Docker requires three flags beyond Docker's default sandbox:
+     --security-opt seccomp=unconfined
+     --ulimit memlock=-1:-1
+     --cap-add SYS_ADMIN
+   These are required because (a) Docker's default seccomp profile blocks
+   the io_uring_setup/io_uring_enter syscalls entirely, (b) io_uring's
+   shared ring buffers need a memlock ulimit above Docker's small default,
+   and (c) IORING_SETUP_SQPOLL specifically requires CAP_SYS_ADMIN on
+   kernels older than 5.11 (the kernel this was verified against). These
+   are kernel/io_uring API requirements, not artifact-specific design
+   choices; on a host with kernel >= 5.11 the CAP_SYS_ADMIN flag may not be
+   necessary (not verified here).

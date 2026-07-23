@@ -1,0 +1,95 @@
+INSTALL
+=======
+
+See REQUIREMENTS.txt for the hardware/software this was verified against.
+
+Option A: Docker (recommended)
+-------------------------------
+
+1. Clone and build the image:
+
+     git clone https://github.com/korea-dbs/sqlite-lap.git
+     cd sqlite-lap
+     docker build -t sqlite-lap .
+
+   This builds liburing from source and compiles both engines
+   (init_construct_fin_table_src -> `sqlite3-construct`,
+   SQLite-LAP -> `sqlite3-lap`) inside the image. Takes a few minutes.
+
+2. Verify the install with the built-in smoke test:
+
+     mkdir -p data
+     docker run --rm \
+       --security-opt seccomp=unconfined \
+       --ulimit memlock=-1:-1 \
+       --cap-add SYS_ADMIN \
+       -v "$(pwd)/data:/data" \
+       sqlite-lap smoke-test
+
+   The three extra flags are required for SQLite-LAP's io_uring mode; see
+   REQUIREMENTS.txt for why.
+
+   Expected output (values are deterministic for the default 5000-row run):
+
+     == [1/2] init_construct_fin_table_src: building 5000-row dataset + .finconstruct ==
+        t1 rows          : 5000
+        bitmap_table rows: 136
+
+     == [2/2] SQLite-LAP: read-only experiment ==
+        t1 rows via SQLite-LAP: 5000
+        close func hit : 272 ,miss : 140
+
+     PASS: constructed 5000 rows, bitmap_table has 136 entries, SQLite-LAP read them back correctly.
+
+   "PASS" at the end means: (a) the construction-only engine created the
+   table, loaded the data, and built the FIN bitmap; and (b) SQLite-LAP
+   opened that same database and read back the identical row count. The
+   `close func hit : N ,miss : M` line is the page-cache hit/miss count for
+   that session -- a nonzero hit count (272 above) means the background
+   io_uring prefetcher warmed pages before the scan reached them, which is
+   the effect this artifact evaluates. Exit code is 0 on PASS, 1 on FAIL.
+
+3. Interactive use, once the smoke test passes:
+
+     docker run --rm -it \
+       --security-opt seccomp=unconfined \
+       --ulimit memlock=-1:-1 \
+       --cap-add SYS_ADMIN \
+       -v "$(pwd)/data:/data" \
+       sqlite-lap
+     # inside the container:
+     sqlite3-construct mydb.db   # create tables, load data, then run .finconstruct
+     sqlite3-lap mydb.db         # read-only experiments against mydb.db
+
+   See the "Example" section of README.md for a full copy-pasteable session.
+
+Option B: native build (no Docker)
+------------------------------------
+
+1. Install build dependencies (Ubuntu/Debian shown; see REQUIREMENTS.txt
+   for the exact package list and the liburing-from-source step).
+
+2. Build each engine the same way:
+
+     cd sqlite-lap/init_construct_fin_table_src   # or SQLite-LAP
+     mkdir bld && cd bld
+     ../configure
+     make -j
+
+   For SQLite-LAP only, edit bld/Makefile first to add pthread/io_uring
+   linking (see README.md "Build" section for the exact lines), then run
+   `make -j`.
+
+   Each produces `bld/sqlite3`.
+
+3. Verify with the same two-step workflow shown in the Docker section
+   above (README.md "Example" section), substituting
+   `init_construct_fin_table_src/bld/sqlite3` and `SQLite-LAP/bld/sqlite3`
+   for `sqlite3-construct`/`sqlite3-lap`. The `smoke-test.sh` script at the
+   repo root runs the same check natively if `sqlite3-construct` and
+   `sqlite3-lap` are on PATH (e.g. symlink them, as the Dockerfile does).
+
+Uninstall
+---------
+Docker: `docker rmi sqlite-lap`.
+Native: remove the `bld/` directories under each engine, or `git clean -xd`.

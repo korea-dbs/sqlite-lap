@@ -1,0 +1,49 @@
+STATUS
+======
+
+We are applying for the following badges:
+
+  - Available
+  - Reviewed
+
+Available
+---------
+This artifact is publicly hosted at:
+  https://github.com/korea-dbs/sqlite-lap
+
+It is released under the MIT license (see LICENSE.txt), an OSI-approved
+open-source license, so it can be freely accessed, used, and redistributed.
+The repository will remain available at this URL for the long term.
+
+Reviewed
+--------
+We believe this artifact merits the Reviewed badge because it is documented
+and packaged so that its core claim -- SQLite-LAP prefetches FIN-identified
+leaf pages via io_uring and background threads, reducing the number of
+on-demand (cold) page reads during a scan -- can be independently checked
+end to end, not just read about:
+
+  - INSTALL.txt gives concrete, copy-pasteable steps (both Docker and
+    native build), plus the exact expected output of a working run.
+  - A single command, `docker run ... sqlite-lap smoke-test`, builds a
+    dataset, constructs the FIN bitmap, switches to the SQLite-LAP engine,
+    re-reads the data, and reports PASS/FAIL together with the io_uring
+    page-cache hit/miss counts for that run -- i.e. the prefetching effect
+    the paper claims is directly visible in the output, not just asserted.
+  - REQUIREMENTS.txt states the hardware/software environment precisely,
+    including the exact container flags SQLite-LAP's io_uring mode needs
+    and why (Docker's default seccomp profile and capability set block
+    io_uring by default; this is documented rather than left for the
+    reviewer to debug).
+  - The build is reproducible from a clean checkout: both the
+    construction-only engine and the SQLite-LAP engine build standalone
+    with `mkdir bld && cd bld && ../configure && make`, with no external
+    source tree required.
+
+Scope note: of the five engine variants in this repository
+(libSQL-LAP, ReadAheadsrc, SQLite-LAP, Vanilla+BG, Vanilla+uring), the two
+this artifact packages, builds, and verifies end-to-end are
+`init_construct_fin_table_src` (dataset construction) and `SQLite-LAP`
+(the prefetching engine under evaluation). The remaining variants are
+present as source but are not part of what this submission asks to be
+reviewed.
