@@ -1,0 +1,7 @@
+.git
+**/bld/
+**/.libs/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
