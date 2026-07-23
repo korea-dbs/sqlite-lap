@@ -170,8 +170,23 @@ docker run --rm -it \
   sqlite-lap
 ```
 
-Inside the container:
+Inside the container, `sqlite3-construct`/`sqlite3-lap` just open an interactive shell —
+you still type the SQL yourself (see the Example section above):
 ```bash
 sqlite3-construct test.db   # build + .finconstruct
 sqlite3-lap test.db         # read-only experiments
 ```
+
+To automatically run that whole example end-to-end and verify it worked, run `smoke-test`
+instead (as the container command, or from inside the shell):
+```bash
+docker run --rm \
+  --security-opt seccomp=unconfined \
+  --ulimit memlock=-1:-1 \
+  --cap-add SYS_ADMIN \
+  -v "$(pwd)/data:/data" \
+  sqlite-lap smoke-test
+```
+It builds a 5000-row table with `init_construct_fin_table_src`, runs `.finconstruct`,
+switches to `SQLite-LAP`, re-reads the table, and reports pass/fail plus the `io_uring`
+cache hit/miss stats. Optional args: `smoke-test [db_path] [row_count]`.

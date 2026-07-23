@@ -35,7 +35,9 @@ RUN cd SQLite-LAP \
  && make -j"$(nproc)" sqlite3
 
 RUN ln -s /opt/EMSOFT2026/init_construct_fin_table_src/bld/sqlite3 /usr/local/bin/sqlite3-construct \
- && ln -s /opt/EMSOFT2026/SQLite-LAP/bld/sqlite3 /usr/local/bin/sqlite3-lap
+ && ln -s /opt/EMSOFT2026/SQLite-LAP/bld/sqlite3 /usr/local/bin/sqlite3-lap \
+ && chmod +x /opt/EMSOFT2026/smoke-test.sh \
+ && ln -s /opt/EMSOFT2026/smoke-test.sh /usr/local/bin/smoke-test
 
 WORKDIR /data
 CMD ["/bin/bash"]
