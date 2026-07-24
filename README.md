@@ -5,19 +5,27 @@ maximize system throughput and resource utilization. SQLite-LAP fur-
 ther optimizes data access by enabling concurrent prefetching, thereby
 maximizing cache utilization and reducing query latency.
 
+See details in our EMSOFT 2026 paper:
+```
+Dohwan Lee, Yewon Shin, Wook-Hee Kim, Jonghyeok Park.
+"Lightweight Asynchronous I/O Optimization for SQLite Scan Performance on Embedded Devices".
+EMSOFT 2026
+```
+
+
 ## Features
-- **Asynchronous operation**:
-  Vanilla, which was originally synchronous, was modified to perform asynchronously.
+- **FIN-aware Asynchronous Prefetching**:
+  When a scan reaches a Final Interior Node (FIN), a background thread prefetches all leaf pages under that FIN via io_uring,
+  decoupling disk I/O from query execution.
 
-- **Optimize Read operation**:
-  We optimized SQLite's read operation to achieve better read performance.
-
-- **Seamless Integration with SQLite**:
-  The project is designed to work directly with SQLite and libSQL enabling transparent and efficient integration without modifying the core database engine.
-
-- **Parallelism**:
-  Maximized parallelism through the utilization of multithreading in FIN-leaf level.
-
+- **I/O Parallelism via Batched Submission**:
+    `io_uring` enables batched read submission and kernel-level polling (`SQPOLL`), reducing per-request system call overhead compared to synchronous I/O.
+  
+- **Minimal Changes to SQLite**:
+  The FIN table and prefetcher are added as auxiliary components, requiring no modification to SQLite's core execution or storage format.
+  
+- **Compatibiliy**:
+  SQLite-LAP works transparently with both SQLite and [LibSQL](https://github.com/tursodatabase/libsql) (including its VectorDB extension) without changing existing query semantics or on-disk layout.
 
 ## Docker
 
